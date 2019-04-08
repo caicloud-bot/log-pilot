@@ -139,7 +139,7 @@ func applyChange() error {
 		return err
 	}
 
-	f, err := os.OpenFile(dstConfigPath, os.O_WRONLY|os.O_CREATE, 0644)
+	f, err := os.OpenFile(dstConfigPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
 	if err != nil {
 		return err
 	}
@@ -159,7 +159,7 @@ var (
 )
 
 func newCmd() *exec.Cmd {
-	log.Infoln("Will run filebeat with command: %v %v", filebeatExecutablePath, fbArgs)
+	log.Infof("Will run filebeat with command: %v %v", filebeatExecutablePath, fbArgs)
 	cmd := exec.Command(filebeatExecutablePath, fbArgs...)
 	cmd.Stderr = os.Stderr
 	cmd.Stdout = os.Stdout

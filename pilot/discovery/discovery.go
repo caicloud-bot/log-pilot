@@ -9,6 +9,8 @@ import (
 	"sync"
 	"time"
 
+	"gopkg.in/yaml.v2"
+
 	"github.com/caicloud/log-pilot/pilot/configurer"
 	"github.com/caicloud/log-pilot/pilot/container"
 	"github.com/caicloud/log-pilot/pilot/kube"
@@ -273,6 +275,8 @@ func (d *discovery) newContainer(containerJSON *types.ContainerJSON) error {
 		d.logger.Debugf("No log collecting config for container %s", containerJSON.ID)
 		return nil
 	}
+	// add filebeats fields into template
+	d.addOutputConfig(logConfigs)
 
 	ev := &configurer.ContainerAddEvent{
 		Container:  info.Container,
@@ -325,4 +329,27 @@ func listToSet(list []string) map[string]struct{} {
 		set[list[i]] = struct{}{}
 	}
 	return set
+}
+
+func (d *discovery) addOutputConfig(logConfigs []*configurer.LogConfig) {
+	outputConfigEnv := os.Getenv("OUTPUT_CONFIG")
+	if outputConfigEnv == "" {
+		return
+	}
+	outputConfig := struct {
+		Fields map[string]string `json:"fields"`
+		// multiline.pattern e.g. : ^\s(at)\s
+		MultilinePattern string `json:"multilinePattern"`
+	}{}
+	err := yaml.Unmarshal([]byte(outputConfigEnv), &outputConfig)
+	if err != nil {
+		d.logger.Error(err)
+		return
+	}
+	for _, logconfig := range logConfigs {
+		logconfig.MultilinePattern = outputConfig.MultilinePattern
+		for k, v := range outputConfig.Fields {
+			logconfig.Tags[k] = v
+		}
+	}
 }

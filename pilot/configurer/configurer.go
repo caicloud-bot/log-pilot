@@ -33,9 +33,10 @@ type LogConfig struct {
 	Format LogFormat
 	// Tags are addtional informations that will be added to log record.
 	// For example, pod informations, user defined tags.
-	Tags   map[string]string
-	InOpts map[string]string
-	Stdout bool
+	Tags             map[string]string
+	InOpts           map[string]string
+	MultilinePattern string
+	Stdout           bool
 }
 
 type LogFormat string

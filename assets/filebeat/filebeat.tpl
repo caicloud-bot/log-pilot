@@ -16,6 +16,14 @@
     {{- range $key, $value := .Tags }}
     {{ $key }}: "{{ $value }}"
     {{- end }}
+  {{ if .MultilinePattern -}}
+  {{- if ne .MultilinePattern ""}}
+  multiline:
+    pattern: {{ .MultilinePattern }}
+    negate: false
+    match: after
+  {{- end -}}
+  {{- end }}
   tail_files: false
   # Harvester closing options
   close_eof: false

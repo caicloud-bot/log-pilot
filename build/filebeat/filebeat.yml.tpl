@@ -1,3 +1,7 @@
+http.enabled: true
+http.host: 0.0.0.0
+http.port: 5066
+
 filebeat.config:
   inputs:
     enabled: true

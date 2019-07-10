@@ -337,9 +337,10 @@ func (d *discovery) addOutputConfig(logConfigs []*configurer.LogConfig) {
 		return
 	}
 	outputConfig := struct {
-		Fields map[string]string `json:"fields"`
+		Fields map[string]string `yaml:"fields"`
 		// multiline.pattern e.g. : ^\s(at)\s
-		MultilinePattern string `json:"multilinePattern"`
+		MultilinePattern string `yaml:"multilinePattern"`
+		IgnoreOlder      string `yaml:"ignoreOlder"`
 	}{}
 	err := yaml.Unmarshal([]byte(outputConfigEnv), &outputConfig)
 	if err != nil {
@@ -348,6 +349,7 @@ func (d *discovery) addOutputConfig(logConfigs []*configurer.LogConfig) {
 	}
 	for _, logconfig := range logConfigs {
 		logconfig.MultilinePattern = outputConfig.MultilinePattern
+		logconfig.IgnoreOlder = outputConfig.IgnoreOlder
 		for k, v := range outputConfig.Fields {
 			logconfig.Tags[k] = v
 		}

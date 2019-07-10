@@ -30,7 +30,7 @@
   close_inactive: 5m
   close_removed: false
   close_renamed: false
-  ignore_older: 48h  
+  ignore_older: {{ if .IgnoreOlder }}{{ .IgnoreOlder }}{{ else }}48h{{ end }}
   # State options
   clean_removed: true
   clean_inactive: 72h

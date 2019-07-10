@@ -36,6 +36,7 @@ type LogConfig struct {
 	Tags             map[string]string
 	InOpts           map[string]string
 	MultilinePattern string
+	IgnoreOlder      string
 	Stdout           bool
 }
 

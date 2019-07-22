@@ -59,6 +59,10 @@ filebeat.inputs:
 # TODO: etcd, apiserver and more..
 
 processors:
+{{ if .multilinePattern -}}
+- drop_fields:
+    fields: ["log"]
+{{- end }}
 - rename:
     fields:
     - from: message

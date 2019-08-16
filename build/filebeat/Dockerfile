@@ -1,4 +1,4 @@
-FROM cargo.caicloudprivatetest.com/library/filebeat:6.5.3
+FROM cargo.caicloudprivatetest.com/library/filebeat:6.5.4
 
 USER root
 RUN yum install -y gettext && yum clean all

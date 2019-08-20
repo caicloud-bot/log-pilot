@@ -23,7 +23,7 @@ _config:
           memory: 100Mi
           cpu: 200m
       image: '[[ registry_release ]]/filebeat:[[ imageTagFromGitTag ]]'
-      imagePullPolicy: IfNotPresent
+      imagePullPolicy: Always
       command:
       - /opt/filebeat-keeper/filebeat-keeper
       args:
@@ -49,7 +49,7 @@ _config:
       - name: output-config
         path: /config
     - image: '[[ registry_release ]]/log-pilot:[[ imageTagFromGitTag ]]'
-      imagePullPolicy: IfNotPresent
+      imagePullPolicy: Always
       command:
       - /opt/log-pilot/bin/log-pilot
       args:
@@ -79,7 +79,7 @@ _config:
         path: /var/run/docker.sock
         readonly: true
     - image: '[[ registry_release ]]/beat-exporter:v0.1.2'
-      imagePullPolicy: IfNotPresent
+      imagePullPolicy: Always
       resources:
         limits:
           cpu: 100m

@@ -95,6 +95,12 @@ _config:
       - key: prometheus.io/scrape
         value: 'true'
     type: DaemonSet
+    schedule:
+      tolerations:
+      - key: cluster.resource.caicloud.io/etcd # standalone etcd node will have this taint
+        operator: Equal
+        value: cps
+        effect: NoExecute
     volumes:
     - name: varlog
       source:

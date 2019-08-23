@@ -10,6 +10,7 @@ import (
 	"sync"
 	"syscall"
 	"text/template"
+	"time"
 
 	"gopkg.in/yaml.v2"
 
@@ -53,6 +54,10 @@ func watchFileChange(path string, reloadCh chan<- struct{}) error {
 		case ev := <-w.Events:
 			log.Infoln("Event:", ev.String())
 			if ev.Op&fsnotify.Create == fsnotify.Create {
+				// ref_link [https://github.com/jimmidyson/configmap-reload/issues/6#issuecomment-355203620]
+				//ConfigMap volumes use an atomic writer. You could familarize
+				//yourself with the mechanic how atomic writes are implemented.
+				//In the end you could check if the actual change you do in 				//your ConfigMap results in the rename of the ..data-symlink (step 9).
 				if filepath.Base(ev.Name) == "..data" {
 					log.Infoln("Configmap updated")
 					reloadCh <- struct{}{}
@@ -64,10 +69,46 @@ func watchFileChange(path string, reloadCh chan<- struct{}) error {
 	}
 }
 
+func start(cmd *exec.Cmd) (<-chan struct{}, error) {
+	cmd.Start()
+	if err := cmd.Start(); err != nil {
+		return nil, err
+	}
+
+	exited := make(chan struct{})
+	go func(ch chan struct{}) {
+		cmd.Wait()
+		close(ch)
+	}(exited)
+
+	return exited, nil
+}
+
+func stop(cmd *exec.Cmd, exited <-chan struct{}) error {
+	log.Infoln("Send TERM signal")
+	if err := cmd.Process.Signal(syscall.SIGTERM); err != nil {
+		return err
+	}
+
+	select {
+	case <-exited:
+		return nil
+	case <-time.After(60 * time.Second):
+		log.Infoln("Kill Process")
+		if err := cmd.Process.Kill(); err != nil {
+			return err
+		}
+	}
+
+	<-exited
+	return nil
+}
+
 func run(stopCh <-chan struct{}) error {
 	reloadCh := make(chan struct{}, 1)
 	started := false
 	cmd := newCmd()
+	var exited <-chan struct{}
 
 	go watchFileChange(filepath.Dir(srcConfigPath), reloadCh)
 
@@ -78,6 +119,7 @@ func run(stopCh <-chan struct{}) error {
 		log.Infoln("Filebeat will not start until configmap being updated")
 	}
 
+	check := time.Tick(10 * time.Second)
 	for {
 		select {
 		case <-stopCh:
@@ -93,25 +135,29 @@ func run(stopCh <-chan struct{}) error {
 				continue
 			}
 
+			var err error
 			if !started {
-				if err := cmd.Start(); err != nil {
+				if exited, err = start(cmd); err != nil {
 					return fmt.Errorf("error run filebeat: %v", err)
 				}
 				log.Infoln("Filebeat start")
 				started = true
 			} else {
-				log.Infoln("Send TERM signal")
-				if err := cmd.Process.Signal(syscall.SIGTERM); err != nil {
-					return fmt.Errorf("error send signal: %v", err)
-				}
-				if err := cmd.Wait(); err != nil {
+				if err = stop(cmd, exited); err != nil {
 					return fmt.Errorf("filebeat quit with error: %v", err)
 				}
 				log.Infoln("Filebeat quit")
 
 				cmd = newCmd()
-				if err := cmd.Start(); err != nil {
+				if exited, err = start(cmd); err != nil {
 					return fmt.Errorf("error run filebeat: %v", err)
+				}
+			}
+		case <-check:
+			if started {
+				if cmd != nil && cmd.ProcessState.Exited() {
+					log.Fatalln("Filebeat has unexpectedly exited: %v", cmd.ProcessState.ExitCode())
+					os.Exit(1)
 				}
 			}
 		}

@@ -1,8 +1,10 @@
 package main
 
 import (
+	"crypto/sha256"
 	"flag"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -18,7 +20,6 @@ import (
 	"github.com/caicloud/logging-admin/pkg/util/osutil"
 
 	"github.com/caicloud/nirvana/log"
-	"gopkg.in/fsnotify/fsnotify.v1"
 )
 
 var (
@@ -27,46 +28,61 @@ var (
 	dstConfigPath          = osutil.Getenv("DST_CONFIG_PATH", "/etc/filebeat/filebeat.yml")
 )
 
-// When configmap being created for the first time, following events received:
-// INFO  1206-09:38:39.496+00 main.go:41 | Event: "/config/..2018_12_06_09_38_39.944532540": CREATE
-// INFO  1206-09:38:39.496+00 main.go:41 | Event: "/config/..2018_12_06_09_38_39.944532540": CHMOD
-// INFO  1206-09:38:39.497+00 main.go:41 | Event: "/config/filebeat-output.yml": CREATE
-// INFO  1206-09:38:39.497+00 main.go:41 | Event: "/config/..data_tmp": RENAME
-// INFO  1206-09:38:39.497+00 main.go:41 | Event: "/config/..data": CREATE
-// INFO  1206-09:38:39.497+00 main.go:41 | Event: "/config/..2018_12_06_09_37_32.878326343": REMOVE
-// When configmap being modified, following events received:
-// INFO  1206-09:42:56.488+00 main.go:41 | Event: "/config/..2018_12_06_09_42_56.160544363": CREATE
-// INFO  1206-09:42:56.488+00 main.go:41 | Event: "/config/..2018_12_06_09_42_56.160544363": CHMOD
-// INFO  1206-09:42:56.488+00 main.go:41 | Event: "/config/..data_tmp": RENAME
-// INFO  1206-09:42:56.488+00 main.go:41 | Event: "/config/..data": CREATE
-// INFO  1206-09:42:56.488+00 main.go:41 | Event: "/config/..2018_12_06_09_38_39.944532540": REMOVE
-func watchFileChange(path string, reloadCh chan<- struct{}) error {
-	w, err := fsnotify.NewWatcher()
+func hashFile(path string) (string, error) {
+	f, err := os.Open(path)
 	if err != nil {
-		return err
+		return "", err
 	}
-	if err := w.Add(path); err != nil {
-		return err
+	defer f.Close()
+
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return "", err
 	}
 
-	for {
-		select {
-		case ev := <-w.Events:
-			log.Infoln("Event:", ev.String())
-			if ev.Op&fsnotify.Create == fsnotify.Create {
-				// ref_link [https://github.com/jimmidyson/configmap-reload/issues/6#issuecomment-355203620]
-				//ConfigMap volumes use an atomic writer. You could familarize
-				//yourself with the mechanic how atomic writes are implemented.
-				//In the end you could check if the actual change you do in 				//your ConfigMap results in the rename of the ..data-symlink (step 9).
-				if filepath.Base(ev.Name) == "..data" {
-					log.Infoln("Configmap updated")
-					reloadCh <- struct{}{}
-				}
-			}
-		case err := <-w.Errors:
-			log.Errorf("Watch error: %v", err)
-		}
+	return string(h.Sum(nil)), nil
+}
+
+func watchFileChange(path string, reloadCh chan<- struct{}) {
+	var (
+		curHash string
+		mtx     sync.Mutex
+	)
+
+	curHash, err := hashFile(path)
+	if err != nil {
+		log.Warningln(err)
 	}
+
+	cb := func() {
+		mtx.Lock()
+		h, err := hashFile(path)
+		if err != nil {
+			log.Warningln(err)
+		}
+
+		if len(curHash) == 0 {
+			log.Infoln("file is created: %v", h)
+			curHash = h
+			reloadCh <- struct{}{}
+		} else if curHash != h {
+			log.Infoln("file need reload, old: %v, new: %v", curHash, h)
+			curHash = h
+			reloadCh <- struct{}{}
+		}
+		mtx.Unlock()
+	}
+
+	//watch CM
+	go watchConfigMapUpdate(path, cb)
+
+	//定时监测
+	go func(update func()) {
+		check := time.Tick(10 * time.Second)
+		for range check {
+			update()
+		}
+	}(cb)
 }
 
 func start(cmd *exec.Cmd) (<-chan struct{}, error) {
@@ -110,7 +126,7 @@ func run(stopCh <-chan struct{}) error {
 	cmd := newCmd()
 	var exited <-chan struct{}
 
-	go watchFileChange(filepath.Dir(srcConfigPath), reloadCh)
+	watchFileChange(filepath.Dir(srcConfigPath), reloadCh)
 
 	if err := applyChange(); err == nil {
 		reloadCh <- struct{}{}

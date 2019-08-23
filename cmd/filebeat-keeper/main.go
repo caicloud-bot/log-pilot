@@ -9,8 +9,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"sync"
-	"syscall"
 	"text/template"
 	"time"
 
@@ -23,9 +23,10 @@ import (
 )
 
 var (
-	filebeatExecutablePath = osutil.Getenv("FB_EXE_PATH", "filebeat")
-	srcConfigPath          = osutil.Getenv("SRC_CONFIG_PATH", "/config/filebeat-output.yml")
-	dstConfigPath          = osutil.Getenv("DST_CONFIG_PATH", "/etc/filebeat/filebeat.yml")
+	filebeatExecutablePath     = osutil.Getenv("FB_EXE_PATH", "filebeat")
+	srcConfigPath              = osutil.Getenv("SRC_CONFIG_PATH", "/config/filebeat-output.yml")
+	dstConfigPath              = osutil.Getenv("DST_CONFIG_PATH", "/etc/filebeat/filebeat.yml")
+	livenessProbePeriodSeconds = osutil.Getenv("LIVENESS_PROBE_PERIOD_SECONDS", "10")
 )
 
 func hashFile(path string) (string, error) {
@@ -56,25 +57,26 @@ func watchFileChange(path string, reloadCh chan<- struct{}) {
 
 	cb := func() {
 		mtx.Lock()
+		defer mtx.Unlock()
+
 		h, err := hashFile(path)
 		if err != nil {
 			log.Warningln(err)
 		}
 
 		if len(curHash) == 0 {
-			log.Infoln("file is created: %v", h)
+			log.Infof("file is created: %x", h)
 			curHash = h
 			reloadCh <- struct{}{}
 		} else if curHash != h {
-			log.Infoln("file need reload, old: %v, new: %v", curHash, h)
+			log.Infof("file need reload, old: %x, new: %x", curHash, h)
 			curHash = h
 			reloadCh <- struct{}{}
 		}
-		mtx.Unlock()
 	}
 
 	//watch CM
-	go watchConfigMapUpdate(path, cb)
+	go watchConfigMapUpdate(filepath.Dir(path), cb)
 
 	//定时监测
 	go func(update func()) {
@@ -85,48 +87,12 @@ func watchFileChange(path string, reloadCh chan<- struct{}) {
 	}(cb)
 }
 
-func start(cmd *exec.Cmd) (<-chan struct{}, error) {
-	cmd.Start()
-	if err := cmd.Start(); err != nil {
-		return nil, err
-	}
-
-	exited := make(chan struct{})
-	go func(ch chan struct{}) {
-		cmd.Wait()
-		close(ch)
-	}(exited)
-
-	return exited, nil
-}
-
-func stop(cmd *exec.Cmd, exited <-chan struct{}) error {
-	log.Infoln("Send TERM signal")
-	if err := cmd.Process.Signal(syscall.SIGTERM); err != nil {
-		return err
-	}
-
-	select {
-	case <-exited:
-		return nil
-	case <-time.After(60 * time.Second):
-		log.Infoln("Kill Process")
-		if err := cmd.Process.Kill(); err != nil {
-			return err
-		}
-	}
-
-	<-exited
-	return nil
-}
-
 func run(stopCh <-chan struct{}) error {
 	reloadCh := make(chan struct{}, 1)
 	started := false
 	cmd := newCmd()
-	var exited <-chan struct{}
 
-	watchFileChange(filepath.Dir(srcConfigPath), reloadCh)
+	watchFileChange(srcConfigPath, reloadCh)
 
 	if err := applyChange(); err == nil {
 		reloadCh <- struct{}{}
@@ -135,12 +101,18 @@ func run(stopCh <-chan struct{}) error {
 		log.Infoln("Filebeat will not start until configmap being updated")
 	}
 
-	check := time.Tick(10 * time.Second)
+	sec, err := strconv.ParseInt(livenessProbePeriodSeconds, 10, 64)
+	if err != nil || sec < 0 {
+		sec = 10
+		log.Warningf("LIVENESS_PROBE_PERIOD_SECONDS is Invalid, use default value %x", sec)
+	}
+
+	check := time.Tick(time.Duration(sec) * time.Second)
 	for {
 		select {
 		case <-stopCh:
 			log.Infoln("Wait filebeat shutdown")
-			if err := cmd.Wait(); err != nil {
+			if err := cmd.Stop(); err != nil {
 				return fmt.Errorf("filebeat quit with error: %v", err)
 			}
 			return nil
@@ -151,28 +123,27 @@ func run(stopCh <-chan struct{}) error {
 				continue
 			}
 
-			var err error
 			if !started {
-				if exited, err = start(cmd); err != nil {
+				if err := cmd.Start(); err != nil {
 					return fmt.Errorf("error run filebeat: %v", err)
 				}
 				log.Infoln("Filebeat start")
 				started = true
 			} else {
-				if err = stop(cmd, exited); err != nil {
+				if err := cmd.Stop(); err != nil {
 					return fmt.Errorf("filebeat quit with error: %v", err)
 				}
 				log.Infoln("Filebeat quit")
 
 				cmd = newCmd()
-				if exited, err = start(cmd); err != nil {
+				if err := cmd.Start(); err != nil {
 					return fmt.Errorf("error run filebeat: %v", err)
 				}
 			}
 		case <-check:
 			if started {
-				if cmd != nil && cmd.ProcessState.Exited() {
-					log.Fatalln("Filebeat has unexpectedly exited: %v", cmd.ProcessState.ExitCode())
+				if cmd != nil && cmd.Exited() {
+					log.Fatalln("Filebeat has unexpectedly exited")
 					os.Exit(1)
 				}
 			}
@@ -220,12 +191,13 @@ var (
 	fbArgs []string
 )
 
-func newCmd() *exec.Cmd {
+func newCmd() *AsyncCmd {
 	log.Infof("Will run filebeat with command: %v %v", filebeatExecutablePath, fbArgs)
 	cmd := exec.Command(filebeatExecutablePath, fbArgs...)
 	cmd.Stderr = os.Stderr
 	cmd.Stdout = os.Stdout
-	return cmd
+
+	return WrapCmd(cmd)
 }
 
 func main() {

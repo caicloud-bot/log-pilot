@@ -8,6 +8,10 @@ import (
 	"github.com/caicloud/nirvana/log"
 )
 
+const (
+	waitingTime = 60
+)
+
 type AsyncCmd struct {
 	cmd      *exec.Cmd
 	waitDone chan struct{}
@@ -45,7 +49,7 @@ func (ac *AsyncCmd) Stop() error {
 	select {
 	case <-ac.waitDone:
 		return nil
-	case <-time.After(60 * time.Second):
+	case <-time.After(waitingTime * time.Second):
 		log.Infoln("Kill Process")
 		if err := ac.cmd.Process.Kill(); err != nil {
 			return err

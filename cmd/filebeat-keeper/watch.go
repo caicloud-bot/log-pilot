@@ -7,6 +7,10 @@ import (
 	"gopkg.in/fsnotify/fsnotify.v1"
 )
 
+const (
+	dataDirName = "..data"
+)
+
 // ref_link [https://github.com/jimmidyson/configmap-reload/issues/6#issuecomment-355203620]
 // ConfigMap volumes use an atomic writer. You could familarize yourself with
 // the mechanic how atomic writes are implemented. In the end you could check
@@ -27,8 +31,7 @@ func watchConfigMapUpdate(path string, update func()) error {
 		case ev := <-w.Events:
 			log.Infoln("Event:", ev.String())
 			if ev.Op&fsnotify.Create == fsnotify.Create {
-
-				if filepath.Base(ev.Name) == "..data" {
+				if filepath.Base(ev.Name) == dataDirName {
 					log.Infoln("Configmap updated")
 					update()
 				}

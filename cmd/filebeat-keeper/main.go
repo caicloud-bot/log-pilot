@@ -22,12 +22,36 @@ import (
 	"github.com/caicloud/nirvana/log"
 )
 
-var (
-	filebeatExecutablePath     = osutil.Getenv("FB_EXE_PATH", "filebeat")
-	srcConfigPath              = osutil.Getenv("SRC_CONFIG_PATH", "/config/filebeat-output.yml")
-	dstConfigPath              = osutil.Getenv("DST_CONFIG_PATH", "/etc/filebeat/filebeat.yml")
-	livenessProbePeriodSeconds = osutil.Getenv("LIVENESS_PROBE_PERIOD_SECONDS", "10")
+const (
+	HeatlthCheckInterval = "HEATLTH_CHECK_INTERVAL"
+	ConfigCheckInterval  = "CONFIG_CHECK_INTERVAL"
 )
+
+var (
+	filebeatExecutablePath = osutil.Getenv("FB_EXE_PATH", "filebeat")
+	srcConfigPath          = osutil.Getenv("SRC_CONFIG_PATH", "/config/filebeat-output.yml")
+	dstConfigPath          = osutil.Getenv("DST_CONFIG_PATH", "/etc/filebeat/filebeat.yml")
+	heatlthCheckInterval   = int64(10)
+	configCheckInterval    = int64(600)
+)
+
+func init() {
+	sec, err := strconv.ParseInt(osutil.Getenv(HeatlthCheckInterval,
+		strconv.FormatInt(heatlthCheckInterval, 10)), 10, 64)
+	if err != nil || sec < 0 {
+		log.Warningf("%s is Invalid, use default value %d", HeatlthCheckInterval, heatlthCheckInterval)
+	} else {
+		heatlthCheckInterval = sec
+	}
+
+	sec, err = strconv.ParseInt(osutil.Getenv(ConfigCheckInterval,
+		strconv.FormatInt(configCheckInterval, 10)), 10, 64)
+	if err != nil || sec < 0 {
+		log.Warningf("%s is Invalid, use default value %d", ConfigCheckInterval, configCheckInterval)
+	} else {
+		configCheckInterval = sec
+	}
+}
 
 func hashFile(path string) (string, error) {
 	f, err := os.Open(path)
@@ -44,47 +68,49 @@ func hashFile(path string) (string, error) {
 	return string(h.Sum(nil)), nil
 }
 
-func watchFileChange(path string, reloadCh chan<- struct{}) {
+func newFileChecker(path string, notify func()) func() {
 	var (
 		curHash string
 		mtx     sync.Mutex
+		err     error
 	)
 
-	curHash, err := hashFile(path)
+	curHash, err = hashFile(path)
 	if err != nil {
 		log.Warningln(err)
 	}
 
-	cb := func() {
+	return func() {
 		mtx.Lock()
 		defer mtx.Unlock()
 
 		h, err := hashFile(path)
 		if err != nil {
 			log.Warningln(err)
+			return
 		}
 
-		if len(curHash) == 0 {
-			log.Infof("file is created: %x", h)
-			curHash = h
-			reloadCh <- struct{}{}
-		} else if curHash != h {
+		if curHash != h {
 			log.Infof("file need reload, old: %x, new: %x", curHash, h)
 			curHash = h
-			reloadCh <- struct{}{}
+			notify()
 		}
 	}
+}
+
+func watchFileChange(path string, reloadCh chan<- struct{}) {
+	checker := newFileChecker(path, func() { reloadCh <- struct{}{} })
 
 	//watch CM
-	go watchConfigMapUpdate(filepath.Dir(path), cb)
+	go watchConfigMapUpdate(filepath.Dir(path), checker)
 
 	//定时监测
-	go func(update func()) {
-		check := time.Tick(10 * time.Second)
+	go func(checkFile func()) {
+		check := time.Tick(time.Duration(configCheckInterval) * time.Second)
 		for range check {
-			update()
+			checkFile()
 		}
-	}(cb)
+	}(checker)
 }
 
 func run(stopCh <-chan struct{}) error {
@@ -101,13 +127,7 @@ func run(stopCh <-chan struct{}) error {
 		log.Infoln("Filebeat will not start until configmap being updated")
 	}
 
-	sec, err := strconv.ParseInt(livenessProbePeriodSeconds, 10, 64)
-	if err != nil || sec < 0 {
-		sec = 10
-		log.Warningf("LIVENESS_PROBE_PERIOD_SECONDS is Invalid, use default value %x", sec)
-	}
-
-	check := time.Tick(time.Duration(sec) * time.Second)
+	check := time.Tick(time.Duration(heatlthCheckInterval) * time.Second)
 	for {
 		select {
 		case <-stopCh:

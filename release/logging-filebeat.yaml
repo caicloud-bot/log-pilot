@@ -72,12 +72,15 @@ _config:
       - name: varlog
         path: /opt/filebeat
         subpath: filebeat
+        propagation: HostToContainer
       - name: varlibdocker
         path: /var/lib/docker
         readonly: true
+        propagation: HostToContainer
       - name: docker-sock
         path: /var/run/docker.sock
         readonly: true
+        propagation: HostToContainer
     - image: '[[ registry_release ]]/beat-exporter:v0.1.2'
       imagePullPolicy: Always
       resources:

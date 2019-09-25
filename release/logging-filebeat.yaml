@@ -36,7 +36,7 @@ _config:
         readonly: true
         propagation: HostToContainer
       - name: varlibdocker
-        path: /var/lib/docker
+        path: /var/lib/docker/containers
         readonly: true
         propagation: HostToContainer
       - name: varlog
@@ -74,7 +74,7 @@ _config:
         subpath: filebeat
         propagation: HostToContainer
       - name: varlibdocker
-        path: /var/lib/docker
+        path: /var/lib/docker/containers
         readonly: true
         propagation: HostToContainer
       - name: docker-sock
@@ -119,7 +119,7 @@ _config:
       type: HostPath
     - name: varlibdocker
       source:
-        path: /var/lib/docker
+        path: /var/lib/docker/containers
       type: HostPath
     - name: output-config
       source:

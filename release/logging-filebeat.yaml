@@ -9,7 +9,15 @@ _config:
     version: "[[ imageTagFromGitTag ]]"
   controllers:
   - containers:
-    - env:
+    - image: '[[ registry_release ]]/filebeat-keeper:[[ imageTagFromGitTag ]]'
+      imagePullPolicy: Always
+      command:
+      - /opt/filebeat-keeper/filebeat-keeper
+      args:
+      - "--path.config=/etc/filebeat"
+      - "--path.home=/opt/filebeat"
+      - "-e"
+      env:
       - name: CLUSTER_ID
         from:
           type: Config
@@ -20,16 +28,8 @@ _config:
           memory: 500Mi
           cpu: "2"
         requests:
-          memory: 100Mi
-          cpu: 200m
-      image: '[[ registry_release ]]/filebeat-keeper:[[ imageTagFromGitTag ]]'
-      imagePullPolicy: Always
-      command:
-      - /opt/filebeat-keeper/filebeat-keeper
-      args:
-      - "--path.config=/etc/filebeat"
-      - "--path.home=/opt/filebeat"
-      - "-e"
+          memory: 200Mi
+          cpu: 20m
       mounts:
       - name: kubeletpods
         path: /var/lib/kubelet/pods
@@ -59,8 +59,8 @@ _config:
       - -e
       resources:
         limits:
-          cpu: 100m
-          memory: 200Mi
+          cpu: 20m
+          memory: 50Mi
         requests:
           cpu: 10m
           memory: 20Mi
@@ -85,13 +85,12 @@ _config:
       imagePullPolicy: Always
       resources:
         limits:
-          cpu: 100m
-          memory: 200Mi
+          cpu: 20m
+          memory: 50Mi
         requests:
           cpu: 10m
           memory: 20Mi
     pod:
-      priorityClassName: platform-critical
       annotations:
       - key: prometheus.io/port
         value: '9479'

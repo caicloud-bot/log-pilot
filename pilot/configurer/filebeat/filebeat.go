@@ -12,14 +12,14 @@ import (
 	"sync"
 	"text/template"
 	"time"
-
-	"github.com/caicloud/log-pilot/pilot/container"
-
-	"github.com/caicloud/log-pilot/pilot/configurer"
-	"github.com/caicloud/log-pilot/pilot/log"
+	"regexp"
 
 	"github.com/elastic/beats/libbeat/logp"
 	"github.com/elastic/go-ucfg"
+
+	"github.com/caicloud/log-pilot/pilot/container"
+	"github.com/caicloud/log-pilot/pilot/configurer"
+	"github.com/caicloud/log-pilot/pilot/log"
 )
 
 // logStates contains states in filebeat registry and related to the container
@@ -33,17 +33,24 @@ type filebeatConfigurer struct {
 	name string
 	base string
 	// Filebeat home path.
-	filebeatHome   string
-	tmpl           *template.Template
-	closeCh        chan bool
-	watchDuration  time.Duration
-	watchContainer map[string]*logStates
-	logger         log.Logger
-	lock           sync.Mutex
+	filebeatHome      string
+	tmpl              *template.Template
+	closeCh           chan bool
+	watchDuration     time.Duration
+	watchContainer    map[string]*logStates
+	logger            log.Logger
+	lock              sync.Mutex
+	filebeatNamespace string
+	filebeatPodRegex  *regexp.Regexp
+	filebeatContainer string
 }
 
 // New creates a new filebeat configurer.
-func New(baseDir, configTemplateFile, filebeatHome string) (configurer.Configurer, error) {
+func New(baseDir, configTemplateFile, filebeatHome, filebeatNamespace, filebeatPodRegex, filebeatContainer string) (configurer.Configurer, error) {
+	filebeatPodCompiledRegex, err := regexp.Compile(filebeatPodRegex)
+	if err != nil {
+		return nil, fmt.Errorf("parse Pod name regex: %s", err.Error())
+	}
 	t, err := template.ParseFiles(configTemplateFile)
 	if err != nil {
 		return nil, fmt.Errorf("error parse log template: %v", err)
@@ -55,14 +62,17 @@ func New(baseDir, configTemplateFile, filebeatHome string) (configurer.Configure
 
 	logger := logp.NewLogger("configurer")
 	c := &filebeatConfigurer{
-		logger:         logger,
-		name:           "filebeat",
-		filebeatHome:   filebeatHome,
-		base:           baseDir,
-		tmpl:           t,
-		closeCh:        make(chan bool),
-		watchContainer: make(map[string]*logStates, 0),
-		watchDuration:  60 * time.Second,
+		logger:            logger,
+		name:              "filebeat",
+		filebeatHome:      filebeatHome,
+		base:              baseDir,
+		tmpl:              t,
+		closeCh:           make(chan bool),
+		watchContainer:    make(map[string]*logStates, 0),
+		watchDuration:     60 * time.Second,
+		filebeatNamespace: filebeatNamespace,
+		filebeatPodRegex:  filebeatPodCompiledRegex,
+		filebeatContainer: filebeatContainer,
 	}
 
 	if err := os.MkdirAll(c.getInputsDir(), 0644); err != nil {
@@ -324,10 +334,22 @@ func (c *filebeatConfigurer) render(ev *configurer.ContainerAddEvent) (string, e
 		"containerId": ev.Container.ID,
 		"configList":  ev.LogConfigs,
 	}
+	// If an ES receiver failed to index a message, Filebeat will output an error message matching the format below;
+	// this error message could be gathered again and thus form a loop, and likely consume a lot of resources;
+	// therefore, we exclude this kind of error message when gathering logs from a Filebeat container
+	if c.isFilebeatContainer(ev.Container) {
+		context["isFilebeat"] = true
+	}
 	if err := c.tmpl.Execute(&buf, context); err != nil {
 		return "", err
 	}
 	return buf.String(), nil
+}
+
+func (c *filebeatConfigurer) isFilebeatContainer(cInfo container.Container) bool {
+	return cInfo.Namespace == c.filebeatNamespace &&
+		c.filebeatPodRegex.MatchString(cInfo.Pod) &&
+		c.filebeatContainer == cInfo.Name
 }
 
 func (c *filebeatConfigurer) getRegsitryState() (map[string]RegistryState, error) {

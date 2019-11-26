@@ -15,17 +15,20 @@ import (
 )
 
 var (
-	template      = flag.String("path.template", "", "Template file path for filebeat")
-	filebeatHome  = flag.String("path.filebeat-home", "", "Filebeat home path")
-	base          = flag.String("path.base", "/", "Directory which mount host path")
-	logPath       = flag.String("path.logs", "", "Logs path")
-	logPrefix     = flag.String("logPrefix", "caicloud", "Log prefix of the env parameters. Multiple prefixes should be separated by \",\"")
-	logLevel      = flag.String("logLevel", "info", "Log level: debug, info, warning, error, critical")
-	wListNS       = flag.String("namespace.whitelist", "", "whitelist of namespaces to watch")
-	bListNS       = flag.String("namespace.blacklist", "", "blacklist of namespaces to ignore")
-	logMaxBytes   = flag.Uint("log.maxSize", 10*1024*1024, "Max size of log file in bytes")
-	logMaxBackups = flag.Uint("log.maxBackups", 7, "Max backups of log files")
-	logToStderr   = flag.Bool("e", false, "Log to stderr")
+	template          = flag.String("path.template", "", "Template file path for filebeat")
+	filebeatHome      = flag.String("path.filebeat-home", "", "Filebeat home path")
+	base              = flag.String("path.base", "/", "Directory which mount host path")
+	logPath           = flag.String("path.logs", "", "Logs path")
+	logPrefix         = flag.String("logPrefix", "caicloud", "Log prefix of the env parameters. Multiple prefixes should be separated by \",\"")
+	logLevel          = flag.String("logLevel", "info", "Log level: debug, info, warning, error, critical")
+	wListNS           = flag.String("namespace.whitelist", "", "whitelist of namespaces to watch")
+	bListNS           = flag.String("namespace.blacklist", "", "blacklist of namespaces to ignore")
+	logMaxBytes       = flag.Uint("log.maxSize", 10*1024*1024, "Max size of log file in bytes")
+	logMaxBackups     = flag.Uint("log.maxBackups", 7, "Max backups of log files")
+	logToStderr       = flag.Bool("e", false, "Log to stderr")
+	filebeatNamespace = flag.String("filebeat.namespace", "kube-system", "namespace where Filebeat is deployed")
+	filebeatPodRegex  = flag.String("filebeat.podRegex", "^logging-filebeat.+", "regex with what to match the name of the Filebeat Pod")
+	filebeatContainer = flag.String("filebeat.container", "c0", "name of the Filebeat container")
 )
 
 func main() {
@@ -38,7 +41,7 @@ func main() {
 		log.Fatal("Invalid path.base:", err)
 	}
 	var cfgr configurer.Configurer
-	cfgr, err = filebeat.New(baseDir, *template, *filebeatHome)
+	cfgr, err = filebeat.New(baseDir, *template, *filebeatHome, *filebeatNamespace, *filebeatPodRegex, *filebeatContainer)
 	if err != nil {
 		log.Fatalf("Error create configurer: %v", err)
 	}

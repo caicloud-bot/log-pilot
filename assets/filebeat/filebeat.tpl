@@ -16,13 +16,20 @@
     {{- range $key, $value := .Tags }}
     {{ $key }}: "{{ $value }}"
     {{- end }}
-  {{ if .MultilinePattern -}}
-  {{- if ne .MultilinePattern ""}}
+  {{ if .Multiline -}}
   multiline:
-    pattern: {{ .MultilinePattern }}
-    negate: false
-    match: after
-  {{- end -}}
+    pattern: {{ .Multiline.Pattern }}
+    negate: {{ .Multiline.Negate }}
+    match: {{ .Multiline.Match }}
+    {{ if .Multiline.FlushPattern -}}
+    flush_pattern: {{ .Multiline.FlushPattern }}
+    {{- end }}
+    {{ if .Multiline.MaxLines -}}
+    max_lines: {{ .Multiline.MaxLines }}
+    {{- end }}
+    {{ if .Multiline.Timeout -}}
+    timeout: {{ .Multiline.Timeout }}
+    {{- end }}
   {{- end }}
   tail_files: false
   # Harvester closing options

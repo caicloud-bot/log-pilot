@@ -61,6 +61,7 @@ _config:
       - name: OUTPUT_CONFIG
         from: 
           type: Config
+          name: filebeat-output
           key: filebeat-output.yml
       resources:
         limits:

@@ -22,13 +22,20 @@ filebeat.inputs:
     {{- range $k,$v := .fields }}
     {{ $k }}: {{ $v }}
     {{- end }}
-  {{ if .multilinePattern -}}
-  {{- if ne .multilinePattern ""}}
+  {{ if .multiline -}}
   multiline:
-    pattern: {{ .multilinePattern }}
-    negate: false
-    match: after
-  {{- end -}}
+    pattern: {{ .multiline.pattern }}
+    negate: {{ .multiline.negate }}
+    match: {{ .multiline.match }}
+    {{ if .multiline.flushPattern -}}
+    flush_pattern: {{ .multiline.flushPattern }}
+    {{- end }}
+    {{ if .multiline.maxLines -}}
+    max_lines: {{ .multiline.maxLines }}
+    {{- end }}
+    {{ if .multiline.timeout -}}
+    timeout: {{ .multiline.timeout }}
+    {{- end }}
   {{- end }}
   {{ if .ignoreOlder -}}
   ignore_older: {{ .ignoreOlder }}
@@ -45,13 +52,20 @@ filebeat.inputs:
     {{- range $k,$v := .fields }}
     {{ $k }}: {{ $v }}
     {{- end }}
-  {{ if .multilinePattern -}}
-  {{- if ne .multilinePattern ""}}
+  {{ if .multiline -}}
   multiline:
-    pattern: {{ .multilinePattern }}
-    negate: false
-    match: after
-  {{- end -}}
+    pattern: {{ .multiline.pattern }}
+    negate: {{ .multiline.negate }}
+    match: {{ .multiline.match }}
+    {{ if .multiline.flushPattern -}}
+    flush_pattern: {{ .multiline.flushPattern }}
+    {{- end }}
+    {{ if .multiline.maxLines -}}
+    max_lines: {{ .multiline.maxLines }}
+    {{- end }}
+    {{ if .multiline.timeout -}}
+    timeout: {{ .multiline.timeout }}
+    {{- end }}
   {{- end }}
   {{ if .ignoreOlder -}}
   ignore_older: {{ .ignoreOlder }}
@@ -59,17 +73,13 @@ filebeat.inputs:
 # TODO: etcd, apiserver and more..
 
 processors:
-{{ if .multilinePattern -}}
 - drop_fields:
-    fields: ["log"]
-{{- end }}
+    fields: ["beat", "host.name", "input.type", "prospector.type", "offset", "source", "log"]
 - rename:
     fields:
     - from: message
       to: log
     ignore_missing: true
-- drop_fields:
-    fields: ["beat", "host.name", "input.type", "prospector.type", "offset", "source", ]
 
 {{- if eq .type "elasticsearch" }}
 setup.template.enabled: true

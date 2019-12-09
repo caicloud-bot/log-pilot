@@ -25,6 +25,15 @@ type ContainerDestroyEvent struct {
 	Container container.Container
 }
 
+type MultilineSetting struct {
+	Pattern      string
+	Negate       bool
+	Match        string
+	FlushPattern string
+	MaxLines     int
+	Timeout      string
+}
+
 type LogConfig struct {
 	Name string
 	// LogFile is absolute path of the log file on host.
@@ -33,11 +42,11 @@ type LogConfig struct {
 	Format LogFormat
 	// Tags are addtional informations that will be added to log record.
 	// For example, pod informations, user defined tags.
-	Tags             map[string]string
-	InOpts           map[string]string
-	MultilinePattern string
-	IgnoreOlder      string
-	Stdout           bool
+	Tags        map[string]string
+	InOpts      map[string]string
+	Multiline   *MultilineSetting
+	IgnoreOlder string
+	Stdout      bool
 }
 
 type LogFormat string

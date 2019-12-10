@@ -22,21 +22,6 @@ filebeat.inputs:
     {{- range $k,$v := .fields }}
     {{ $k }}: {{ $v }}
     {{- end }}
-  {{ if .multiline -}}
-  multiline:
-    pattern: {{ .multiline.pattern }}
-    negate: {{ .multiline.negate }}
-    match: {{ .multiline.match }}
-    {{ if .multiline.flushPattern -}}
-    flush_pattern: {{ .multiline.flushPattern }}
-    {{- end }}
-    {{ if .multiline.maxLines -}}
-    max_lines: {{ .multiline.maxLines }}
-    {{- end }}
-    {{ if .multiline.timeout -}}
-    timeout: {{ .multiline.timeout }}
-    {{- end }}
-  {{- end }}
   {{ if .ignoreOlder -}}
   ignore_older: {{ .ignoreOlder }}
   {{- end }}  
@@ -52,21 +37,6 @@ filebeat.inputs:
     {{- range $k,$v := .fields }}
     {{ $k }}: {{ $v }}
     {{- end }}
-  {{ if .multiline -}}
-  multiline:
-    pattern: {{ .multiline.pattern }}
-    negate: {{ .multiline.negate }}
-    match: {{ .multiline.match }}
-    {{ if .multiline.flushPattern -}}
-    flush_pattern: {{ .multiline.flushPattern }}
-    {{- end }}
-    {{ if .multiline.maxLines -}}
-    max_lines: {{ .multiline.maxLines }}
-    {{- end }}
-    {{ if .multiline.timeout -}}
-    timeout: {{ .multiline.timeout }}
-    {{- end }}
-  {{- end }}
   {{ if .ignoreOlder -}}
   ignore_older: {{ .ignoreOlder }}
   {{- end }} 

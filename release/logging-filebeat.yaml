@@ -59,10 +59,11 @@ _config:
       - -e
       env: 
       - name: OUTPUT_CONFIG
-        from: 
+        from:
           type: Config
           name: filebeat-output
           key: filebeat-output.yml
+          optional: true
       resources:
         limits:
           cpu: 20m

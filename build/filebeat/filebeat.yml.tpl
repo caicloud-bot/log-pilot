@@ -9,7 +9,7 @@ filebeat.config:
     reload.enabled: true
     reload.period: 10s
 
-filebeat.inputs: 
+filebeat.inputs:
 - type: log
   enabled: true
   fields_under_root: true
@@ -24,7 +24,7 @@ filebeat.inputs:
     {{- end }}
   {{ if .ignoreOlder -}}
   ignore_older: {{ .ignoreOlder }}
-  {{- end }}  
+  {{- end }}
 - type: log
   enabled: true
   fields_under_root: true
@@ -39,7 +39,7 @@ filebeat.inputs:
     {{- end }}
   {{ if .ignoreOlder -}}
   ignore_older: {{ .ignoreOlder }}
-  {{- end }} 
+  {{- end }}
 # TODO: etcd, apiserver and more..
 
 processors:

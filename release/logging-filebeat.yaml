@@ -55,10 +55,11 @@ _config:
       command:
       - /opt/log-pilot/bin/log-pilot
       args:
-      - --path.template=filebeat.tpl
-      - --path.filebeat-home=/opt/filebeat
-      - --logLevel=debug
-      - -e
+      - "--path.template=filebeat.tpl"
+      - "--path.filebeat-home=/opt/filebeat"
+      - "--logLevel=info"
+      - "-e"
+      - "--namespace.blacklist=default,kube-system"
       env: 
       - name: OUTPUT_CONFIG
         from:

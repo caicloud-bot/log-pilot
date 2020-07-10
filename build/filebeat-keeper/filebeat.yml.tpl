@@ -53,6 +53,10 @@ output.elasticsearch:
     {{- range .hosts }}
     - {{ . }}
     {{- end }}
+    {{if .username }}
+    username: {{ .username }}
+    password: {{ .password }}
+    {{end}}
     index: logstash-%{+yyyy.MM.dd}
 {{- end }}
 

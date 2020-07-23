@@ -7,18 +7,18 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
 	"text/template"
 	"time"
-	"regexp"
 
 	"github.com/elastic/beats/libbeat/logp"
 	"github.com/elastic/go-ucfg"
 
-	"github.com/caicloud/log-pilot/pilot/container"
 	"github.com/caicloud/log-pilot/pilot/configurer"
+	"github.com/caicloud/log-pilot/pilot/container"
 	"github.com/caicloud/log-pilot/pilot/log"
 )
 

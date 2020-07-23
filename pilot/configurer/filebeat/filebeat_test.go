@@ -2,7 +2,7 @@ package filebeat
 
 import (
 	"testing"
-			)
+)
 
 var (
 	expectRenderResult = `

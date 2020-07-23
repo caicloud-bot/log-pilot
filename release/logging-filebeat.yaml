@@ -58,6 +58,7 @@ _config:
       - "--logLevel=info"
       - "-e"
       - "--namespace.blacklist=default,kube-system"
+      - "--pod.whiteRegex=^kube-system/(lb-.+|apiserver-proxy-nginx-preset-.+)$"
       env: 
       - name: OUTPUT_CONFIG
         from:

@@ -5,13 +5,13 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/caicloud/log-pilot/pilot/configurer"
 	"github.com/caicloud/log-pilot/pilot/configurer/filebeat"
 	"github.com/caicloud/log-pilot/pilot/discovery"
 	"github.com/caicloud/log-pilot/pilot/log"
-	"strings"
 )
 
 var (
@@ -23,6 +23,8 @@ var (
 	logLevel          = flag.String("logLevel", "info", "Log level: debug, info, warning, error, critical")
 	wListNS           = flag.String("namespace.whitelist", "", "whitelist of namespaces to watch")
 	bListNS           = flag.String("namespace.blacklist", "", "blacklist of namespaces to ignore")
+	wListPodRegex     = flag.String("pod.whiteRegex", "", "regex with what to match the name of the pod to watch")
+	bListPodRegex     = flag.String("pod.blackRegex", "", "regex with what to match the name of the pod to ignore")
 	logMaxBytes       = flag.Uint("log.maxSize", 10*1024*1024, "Max size of log file in bytes")
 	logMaxBackups     = flag.Uint("log.maxBackups", 7, "Max backups of log files")
 	logToStderr       = flag.Bool("e", false, "Log to stderr")
@@ -46,7 +48,7 @@ func main() {
 		log.Fatalf("Error create configurer: %v", err)
 	}
 
-	d, err := discovery.New(baseDir, *logPrefix, cfgr, parseList(*bListNS), parseList(*wListNS))
+	d, err := discovery.New(baseDir, *logPrefix, cfgr, parseList(*bListNS), parseList(*wListNS), *bListPodRegex, *wListPodRegex)
 	if err != nil {
 		log.Fatalf("Error create discovery: %v", err)
 	}

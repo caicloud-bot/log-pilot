@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -52,10 +53,20 @@ type discovery struct {
 	mutex           sync.Mutex
 	bListNS         map[string]struct{} // blacklisted namespaces
 	wListNS         map[string]struct{} // whitelisted namespaces
+	bListPodRegex   *regexp.Regexp      // blacklisted Regexp pods
+	wListPodRegex   *regexp.Regexp      // whitelisted Regexp pods
 }
 
 // New creates a new Discovery
-func New(baseDir, logPrefix string, configurer configurer.Configurer, bListNS, wListNS []string) (Discovery, error) {
+func New(baseDir, logPrefix string, configurer configurer.Configurer, bListNS, wListNS []string, bListPodRegex, wListPodRegex string) (Discovery, error) {
+	bListPodCompiledRegex, err := regexp.Compile(bListPodRegex)
+	if err != nil {
+		return nil, fmt.Errorf("parse blacklisted pod name regex:%s", err.Error())
+	}
+	wListPodCompiledRegex, err := regexp.Compile(wListPodRegex)
+	if err != nil {
+		return nil, fmt.Errorf("parse whitelisted pod name regex:%s", err.Error())
+	}
 	if os.Getenv("DOCKER_API_VERSION") == "" {
 		os.Setenv("DOCKER_API_VERSION", "1.23")
 	}
@@ -95,6 +106,8 @@ func New(baseDir, logPrefix string, configurer configurer.Configurer, bListNS, w
 		existContainers: make(map[string]*containerInfo),
 		bListNS:         listToSet(bListNS),
 		wListNS:         listToSet(wListNS),
+		bListPodRegex:   bListPodCompiledRegex,
+		wListPodRegex:   wListPodCompiledRegex,
 	}, nil
 }
 
@@ -259,7 +272,7 @@ func (d *discovery) newContainer(containerJSON *types.ContainerJSON) error {
 	info := getContainerInfo(d.cache, containerJSON)
 	if len(containerJSON.Config.Labels) > 0 {
 		// Skip POD containers
-		if info.Name == "POD" || !d.isResponsible(info.Namespace) {
+		if info.Name == "POD" || !d.isResponsible(info.Namespace, info.Pod) {
 			return nil
 		}
 	}
@@ -312,7 +325,24 @@ func (d *discovery) Stop() {
 	d.configurer.Stop()
 }
 
-func (d *discovery) isResponsible(namespace string) bool {
+func (d *discovery) isResponsible(namespace string, pod string) bool {
+	log.Infof("[debug] isResponsible got namespace=%s, pod=%s", namespace, pod)
+	podFilterKey := fmt.Sprintf("%v/%v", namespace, pod)
+	if len(d.bListPodRegex.String()) > 0 {
+		if match := d.bListPodRegex.MatchString(podFilterKey); match {
+			log.Infof("[debug] isResponsible returned false due to pod black list=%v", d.bListPodRegex.String())
+			return false
+		}
+	}
+	if len(d.wListPodRegex.String()) > 0 {
+		match := d.wListPodRegex.MatchString(podFilterKey)
+		log.Infof("[debug] isResponsible returned %v due to pod white list,blackRegex=%v,whiteRegex=%v", match, d.bListPodRegex.String(), d.wListPodRegex.String())
+		return match || d.namespaceFilter(namespace)
+	}
+	return d.namespaceFilter(namespace)
+}
+
+func (d *discovery) namespaceFilter(namespace string) bool {
 	if _, inBList := d.bListNS[namespace]; inBList {
 		return false
 	}
